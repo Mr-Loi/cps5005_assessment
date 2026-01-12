@@ -1,42 +1,68 @@
-import { Request, Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
+import { Router } from "express";
+import bcrypt from "bcrypt";
+import { UserModel } from "../models/User";
+import { signToken } from "../utils/jwt";
+import { requireAuth, AuthRequest } from "../middleware/auth";
 
-export interface AuthRequest extends Request {
-  userId?: string;
-}
+export const authRouter = Router();
 
-export function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
-  const header = req.headers.authorization;
+// POST /api/auth/register
+authRouter.post("/register", async (req, res) => {
+  const { name, email, password } = req.body as {
+    name: string;
+    email: string;
+    password: string;
+  };
 
-  // 1) Must have "Authorization: Bearer <token>"
-  if (!header || !header.startsWith("Bearer ")) {
-    return res.status(401).json({ message: "Missing or invalid token" });
+  if (!name || !email || !password) {
+    return res.status(400).json({ message: "Missing fields" });
   }
 
-  // 2) Extract token safely
-  const token = header.slice("Bearer ".length).trim();
-  if (!token) {
-    return res.status(401).json({ message: "Missing or invalid token" });
+  if (password.length < 6) {
+    return res.status(400).json({ message: "Password must be at least 6 characters" });
   }
 
-  // 3) Read secret safely
-  const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    console.error("JWT_SECRET is not set in .env");
-    return res.status(500).json({ message: "Server configuration error" });
+  const existing = await UserModel.findOne({ email });
+  if (existing) {
+    return res.status(409).json({ message: "Email already in use" });
   }
 
-  // 4) Verify token
-  try {
-    const decoded = jwt.verify(token, secret) as any;
+  const passwordHash = await bcrypt.hash(password, 10);
+  const user = await UserModel.create({ name, email, passwordHash });
 
-    if (!decoded || typeof decoded.userId !== "string") {
-      return res.status(401).json({ message: "Invalid token payload" });
-    }
+  const token = signToken({ userId: user._id.toString() });
+  return res.status(201).json({ token });
+});
 
-    req.userId = decoded.userId;
-    return next();
-  } catch {
-    return res.status(401).json({ message: "Invalid token" });
+// POST /api/auth/login
+authRouter.post("/login", async (req, res) => {
+  const { email, password } = req.body as { email: string; password: string };
+
+  if (!email || !password) {
+    return res.status(400).json({ message: "Missing fields" });
   }
-}
+
+  const user = await UserModel.findOne({ email });
+  if (!user) {
+    return res.status(401).json({ message: "Invalid credentials" });
+  }
+
+  const ok = await bcrypt.compare(password, user.passwordHash);
+  if (!ok) {
+    return res.status(401).json({ message: "Invalid credentials" });
+  }
+
+  const token = signToken({ userId: user._id.toString() });
+  return res.json({ token });
+});
+
+// GET /api/auth/me
+authRouter.get("/me", requireAuth, async (req: AuthRequest, res) => {
+  if (!req.userId) return res.status(401).json({ message: "Unauthorized" });
+
+  const user = await UserModel.findById(req.userId).select("name email tariffPerKwh dailyGoalKwh");
+  if (!user) return res.status(404).json({ message: "User not found" });
+
+  return res.json(user);
+});
+
