@@ -15,6 +15,7 @@
   </style>
 </head>
 <body>
+  <!--dashboard-->
   <h2>Eco Track Dashboard</h2>
   <button onclick="logout()">Logout</button>
 
@@ -72,6 +73,7 @@
     <tbody id="readingsBody"></tbody>
   </table>
 
+  <!--gets items-->
   <script>
     const token = localStorage.getItem("token");
     if (!token) window.location.href = "/login.html";
@@ -127,6 +129,7 @@
       `).join("");
     }
 
+    <!--create device-->
     async function createDevice() {
       const name = document.getElementById("dname").value.trim();
       const type = document.getElementById("dtype").value.trim();
@@ -211,7 +214,6 @@
       `).join("");
     }
 
-    // Initial load
     apiHealth();
     fetchDevices();
     fetchReadings();

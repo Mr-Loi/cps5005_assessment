@@ -12,18 +12,18 @@ export function requireAuth(
 ) {
   const header = req.headers.authorization;
 
-  // Must be: Authorization: Bearer <token>
+  // bearer token auth
   if (!header || !header.startsWith("Bearer ")) {
     return res.status(401).json({ message: "Missing or invalid token" });
   }
 
-  // Safely extract token
+  // extract token
   const token = header.slice("Bearer ".length).trim();
   if (!token) {
     return res.status(401).json({ message: "Missing or invalid token" });
   }
 
-  // Ensure secret exists
+  // secret exists
   const secret = process.env.JWT_SECRET;
   if (!secret) {
     console.error("JWT_SECRET is not set");
@@ -37,6 +37,7 @@ export function requireAuth(
       return res.status(401).json({ message: "Invalid token payload" });
     }
 
+    // checks id
     req.userId = decoded.userId;
     next();
   } catch (err) {
