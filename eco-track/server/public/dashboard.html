@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Eco Track – Dashboard</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 16px; }
+    input { margin: 4px 0; padding: 6px; width: 260px; }
+    button { margin: 6px 0; padding: 6px 10px; }
+    table { border-collapse: collapse; margin-top: 10px; width: 100%; max-width: 900px; }
+    th, td { border: 1px solid #ccc; padding: 8px; }
+    .row { display: flex; gap: 18px; flex-wrap: wrap; }
+    .card { border: 1px solid #ddd; padding: 12px; border-radius: 8px; }
+    #msg { margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h2>Eco Track Dashboard</h2>
+  <button onclick="logout()">Logout</button>
+
+  <div id="msg"></div>
+
+  <div class="row">
+    <div class="card">
+      <h3>Add Device</h3>
+      <div>
+        <label>Name</label><br />
+        <input id="dname" placeholder="e.g. Fridge" />
+      </div>
+      <div>
+        <label>Type</label><br />
+        <input id="dtype" placeholder="e.g. fridge" />
+      </div>
+      <div>
+        <label>Power (Watts)</label><br />
+        <input id="dwatts" placeholder="e.g. 150" />
+      </div>
+      <button onclick="createDevice()">Add</button>
+    </div>
+
+    <div class="card">
+      <h3>Status</h3>
+      <div><b>API:</b> <span id="apiStatus">checking…</span></div>
+      <div><b>Devices:</b> <span id="deviceCount">0</span></div>
+    </div>
+  </div>
+
+  <h3>Your Devices</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Type</th>
+        <th>Watts</th>
+        <th>Status</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody id="devicesBody"></tbody>
+  </table>
+
+  <h3>Latest Readings (auto refresh every 5s)</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Device ID</th>
+        <th>Power (W)</th>
+        <th>Energy (kWh)</th>
+        <th>Time</th>
+      </tr>
+    </thead>
+    <tbody id="readingsBody"></tbody>
+  </table>
+
+  <script>
+    const token = localStorage.getItem("token");
+    if (!token) window.location.href = "/login.html";
+
+    const msgEl = document.getElementById("msg");
+    function showMsg(text, isError = false) {
+      msgEl.innerHTML = `<p style="color:${isError ? "red" : "green"}">${text}</p>`;
+    }
+
+    function logout() {
+      localStorage.removeItem("token");
+      window.location.href = "/login.html";
+    }
+
+    async function apiHealth() {
+      try {
+        const res = await fetch("/health");
+        document.getElementById("apiStatus").innerText = res.ok ? "OK" : "NOT OK";
+      } catch {
+        document.getElementById("apiStatus").innerText = "OFFLINE";
+      }
+    }
+
+    async function fetchDevices() {
+      const res = await fetch("/api/devices", {
+        headers: { Authorization: "Bearer " + token }
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        console.log("GET /api/devices failed:", data);
+        showMsg(data.message || "Failed to load devices", true);
+        return;
+      }
+
+      const devices = data;
+      document.getElementById("deviceCount").innerText = String(devices.length);
+
+      const tbody = document.getElementById("devicesBody");
+      tbody.innerHTML = devices.map(d => `
+        <tr>
+          <td>${d.name}</td>
+          <td>${d.type}</td>
+          <td>${d.powerRatingWatts}</td>
+          <td>${d.status}</td>
+          <td>
+            <button onclick="toggleDevice('${d._id}', '${d.status}')">
+              Turn ${d.status === "on" ? "OFF" : "ON"}
+            </button>
+          </td>
+        </tr>
+      `).join("");
+    }
+
+    async function createDevice() {
+      const name = document.getElementById("dname").value.trim();
+      const type = document.getElementById("dtype").value.trim();
+      const wattsStr = document.getElementById("dwatts").value.trim();
+      const powerRatingWatts = Number(wattsStr);
+
+      if (!name || !type || !wattsStr || Number.isNaN(powerRatingWatts)) {
+        showMsg("Please enter name, type, and a valid watts number.", true);
+        return;
+      }
+
+      const res = await fetch("/api/devices", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + token
+        },
+        body: JSON.stringify({ name, type, powerRatingWatts })
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        console.log("POST /api/devices failed:", data);
+        showMsg(data.message || "Failed to create device", true);
+        return;
+      }
+
+      showMsg("Device added!");
+      document.getElementById("dname").value = "";
+      document.getElementById("dtype").value = "";
+      document.getElementById("dwatts").value = "";
+
+      await fetchDevices(); // refresh table immediately
+    }
+
+    async function toggleDevice(id, currentStatus) {
+      const newStatus = currentStatus === "on" ? "off" : "on";
+
+      const res = await fetch("/api/devices/" + id, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + token
+        },
+        body: JSON.stringify({ status: newStatus })
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        console.log("PUT /api/devices/:id failed:", data);
+        showMsg(data.message || "Failed to update device", true);
+        return;
+      }
+
+      showMsg(`Device turned ${newStatus.toUpperCase()}!`);
+      await fetchDevices();
+    }
+
+    async function fetchReadings() {
+      const res = await fetch("/api/readings/latest", {
+        headers: { Authorization: "Bearer " + token }
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        console.log("GET /api/readings/latest failed:", data);
+        return;
+      }
+
+      const readings = data;
+      const tbody = document.getElementById("readingsBody");
+      tbody.innerHTML = readings.map(r => `
+        <tr>
+          <td>${r.deviceId}</td>
+          <td>${r.powerWatts}</td>
+          <td>${Number(r.energyKwh).toFixed(4)}</td>
+          <td>${new Date(r.timestamp).toLocaleTimeString()}</td>
+        </tr>
+      `).join("");
+    }
+
+    // Initial load
+    apiHealth();
+    fetchDevices();
+    fetchReadings();
+    setInterval(fetchReadings, 5000);
+  </script>
+</body>
+</html>
