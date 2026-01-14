@@ -1,11 +1,7 @@
 import { DeviceModel } from "../models/Device";
 import { ReadingModel } from "../models/Reading";
 
-/**
- * Virtual IoT simulator:
- * Every X milliseconds, it generates an energy reading for each device that is ON.
- * This satisfies "logging energy consumption in real-time" (using polling, not sockets).
- */
+// virtual iot sim
 export function startSimulator(intervalMs = 5000) {
   setInterval(async () => {
     const onDevices = await DeviceModel.find({ status: "on" });

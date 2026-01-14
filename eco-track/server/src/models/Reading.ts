@@ -11,7 +11,7 @@ const readingSchema = new Schema(
   { timestamps: true }
 );
 
-// Helps performance for "latest" queries and history queries
+// for performance
 readingSchema.index({ userId: 1, timestamp: -1 });
 readingSchema.index({ deviceId: 1, timestamp: -1 });
 

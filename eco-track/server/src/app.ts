@@ -19,7 +19,6 @@ app.use(
 app.use(cors());
 app.use(express.json());
 
-// static pages (optional)
 app.use(express.static(path.resolve(process.cwd(), "public")));
 
 app.get("/health", (_req, res) => res.json({ status: "OK" }));

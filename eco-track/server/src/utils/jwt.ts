@@ -1,7 +1,7 @@
 import jwt, { Secret } from "jsonwebtoken";
 
 /**
- * Signs and returns a JWT token
+ * signs and returns token
  */
 export function signToken(payload: object): string {
   const secret = process.env.JWT_SECRET as Secret;
